@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MetricPlayground – Measurement, Observation, Framing, Judging</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MetricPlayground: The experimental lab for inventing and discovering the best LLM evaluation metrics.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+    <style>
+        :root { --lab-bg: #101014; --lab-panel: #19191d; --lab-border: #262629; --lab-fg: #f5f5f5; --lab-muted: #b0b0b5;}
+        body { background: var(--lab-bg); color: var(--lab-fg); font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', 'monospace'; min-height: 100vh;}
+        .lab-card { background: var(--lab-panel); border: 1px solid var(--lab-border); border-radius: 0.5rem;}
+        .lab-input, .lab-textarea { background: #101014; color: var(--lab-fg); border: 1px solid var(--lab-border); border-radius: 0.375rem;}
+        .lab-input::placeholder, .lab-textarea::placeholder { color: #7c7b88; }
+        .lab-loader-overlay { position: fixed; z-index: 1000; inset: 0; background: rgba(16,16,20,0.92);
+          display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace;}
+        .loader-dots span { font-size: 1.75rem; letter-spacing: 0.18em; opacity: 0.15;}
+        .loader-dots .dot-on { opacity: 1; color: #fff; transition: opacity 0.2s;}
+        .lab-footer { color: #888; font-size: 0.99rem; padding: 1.6em 0 0.6em 0; text-align: center; letter-spacing: .02em;}
+        .lab-muted { color: var(--lab-muted);}
+        .lab-help { color: var(--lab-muted); font-size: 0.93rem;}
+        .motif { color: #e5e5e6; font-size:1.06rem; font-family: inherit; letter-spacing:.04em; font-weight: bold;}
+        .tagline { color: #b8bcff; font-size:1.16rem; font-family:'IBM Plex Mono',monospace; letter-spacing:.02em; margin-bottom:1rem;}
+        .CodeMirror { background: #19191d; color: #edeef1; font-size: 1em; min-height: 140px; border-radius:0.375em;}
+        .modal-bg { background: rgba(8,8,12,0.8);}
+        .fade { transition: opacity 0.25s; }
+        .save-success { color: #4ade80; }
+        .save-error { color: #f87171; }
+    </style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const API_BASE_URL = 'https://evaluation-metric-playground.vercel.app';
+let state = {
+    isAuthenticated: false,
+    authCredentials: { username: '', accessKey: '' },
+    showAccessKey: false,
+    authError: '',
+    showKeyPopup: false,
+    keyPopupStep: "form",
+    keyPopupEmail: '',
+    keyPopupMsg: '',
+    saveMetricStatus: null, // {success: bool, message: string}
+    formData: {
+        name: 'Helpfulness & Tone Metric',
+        prompt_template: "Evaluate the response to the user's question for helpfulness and tone. User: {{user}} Response: {{response}}",
+        input_fields: ['user','response'],
+        test_case_params: { user: 'How do I reset my password?', response: "You can reset your password by clicking 'Forgot Password' on the login screen." },
+        output_schema: {
+            helpfulness: 'Return a float from 0 to 1 (1 = fully helpful, 0 = not helpful at all).',
+            tone: 'Return one of: polite, neutral, rude.',
+            explanation: 'Give a brief explanation in <50 words.'
+        },
+        post_process_code: '',
+        model: 'sonar-pro'
+    },
+    validationErrors: {},
+    isLoading: false,
+    loaderDots: 0,
+    result: null,
+    apiError: '',
+    evaluationFinished: false
+};
+
+function extractPlaceholders(str) {
+    const matches = [...str.matchAll(/\{\{(\w+)\}\}/g)];
+    return Array.from(new Set(matches.map(m => m[1])));
+}
+function updateFieldsFromTemplate() {
+    const fields = extractPlaceholders(state.formData.prompt_template);
+    state.formData.input_fields = fields;
+    Object.keys(state.formData.test_case_params).forEach(k=>{
+      if (!fields.includes(k)) delete state.formData.test_case_params[k];
+    });
+    fields.forEach(k => {
+        if (!(k in state.formData.test_case_params))
+            state.formData.test_case_params[k] = '';
+    });
+}
+function validateForm() {
+    let err = {};
+    if (!state.formData.name.trim()) err.name = 'Required';
+    if (!state.formData.prompt_template.trim()) err.prompt_template = 'Required';
+    if (state.formData.input_fields.length === 0) err.prompt_template = 'Template must use at least one {{var}} field';
+    state.formData.input_fields.forEach(field=>{
+        if (!state.formData.test_case_params[field])
+            err['test_case_params_'+field] = 'Fill required value';
+    });
+    if (!Object.keys(state.formData.output_schema).length) err.output_schema = 'Schema required';
+    if (state.formData.post_process_code && !state.formData.post_process_code.includes('def postprocess('))
+        err.post_process_code = "Define a 'def postprocess(...)' Python function.";
+    return err;
+}
+function handleAuth() {
+    state.authError = '';
+    if (!state.authCredentials.accessKey.trim()) { state.authError = "Access key required"; return render(); }
+    state.isAuthenticated = true; render();
+}
+async function handleSubmit() {
+    state.validationErrors = validateForm();
+    if (Object.keys(state.validationErrors).length) return render();
+    state.isLoading = true;
+    state.apiError = '';
+    state.evaluationFinished = false;
+    state.saveMetricStatus = null;
+    state.result = null; render();
+    let tries = 0, maxTries = 3, lastErr = '';
+    updateFieldsFromTemplate();
+    while (tries < maxTries) {
+        try {
+            const credentials = btoa(`${state.authCredentials.username}:${state.authCredentials.accessKey}`);
+            const resp = await fetch(`${API_BASE_URL}/v1/custom_metric/evaluate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Basic ${credentials}`
+                },
+                body: JSON.stringify(state.formData)
+            });
+            if (!resp.ok) {
+                if (resp.status === 401) { state.apiError = "Unauthorized. Please check your access key."; break; }
+                try { let json = await resp.json(); lastErr = json && json.detail ? json.detail : 'HTTP '+resp.status; }
+                catch { lastErr = 'HTTP '+resp.status; }
+                throw new Error(lastErr);
+            }
+            let data = await resp.json();
+            state.result = data;
+            state.evaluationFinished = true;
+            state.apiError = ''; break;
+        } catch (e) {
+            lastErr = e.message;
+            tries += 1;
+            if (tries >= maxTries) break;
+            await new Promise(res=>setTimeout(res, 1000));
+        }
+    }
+    if (tries===maxTries && !state.result && !state.apiError) {
+        state.apiError = "Evaluation failed. Please review your metric configuration and try again.";
+    }
+    state.isLoading = false; render();
+}
+
+async function handleSaveMetric() {
+    state.saveMetricStatus = null;
+    render();
+    try {
+        const credentials = btoa(`${state.authCredentials.username}:${state.authCredentials.accessKey}`);
+        const resp = await fetch(`${API_BASE_URL}/save_metric`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${credentials}`
+            },
+            body: JSON.stringify({
+                metric_name: state.formData.name,
+                prompt_template: state.formData.prompt_template,
+                output_schema: state.formData.output_schema,
+                post_process_code: state.formData.post_process_code,
+                access_key: state.authCredentials.accessKey
+            })
+        });
+        if (resp.ok) {
+            state.saveMetricStatus = {success: true, message: "Metric saved successfully."};
+        } else {
+            let data;
+            try { data = await resp.json(); } catch {}
+            state.saveMetricStatus = {success: false, message: data && data.detail ? data.detail : "Failed to save metric."};
+        }
+    } catch(e) {
+        state.saveMetricStatus = {success: false, message: "Network error. Please try again."};
+    }
+    render();
+}
+
+let loaderInterval = null;
+function loaderOverlay() {
+  return `<div class="lab-loader-overlay" id="lab-loader-overlay">
+    <div>
+      <div class="flex flex-col items-center">
+        <div class="mb-4 text-lg"><span style="font-weight:bold;">Crunching</span>
+          <span class="loader-dots">${[0,1,2].map(i=>`<span class="${(i===state.loaderDots?'dot-on':'')}">.</span>`).join('')}</span>
+        </div>
+        <div class="py-2 px-3 bg-black/60 rounded text-xs border text-lab-muted" style="border-color:#222;">
+          Running your experiment in the lab...
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderAuth() {
+return `<div class="min-h-screen flex items-center justify-center lab-bg" style="background:#0a0a0d;">
+  <div class="lab-card max-w-sm w-full p-7 shadow-xl relative">
+    <div class="flex items-center mb-2 justify-center">
+      <div class="rounded-full border border-gray-800 bg-black h-9 w-9 flex items-center justify-center mr-2"><span style="font-size:1.6rem;font-weight:bold;">M</span></div>
+      <span class="text-xl font-mono font-bold tracking-wide">MetricPlayground</span>
+    </div>
+    <div class="motif mb-1 text-center">Measurement, Observation, Framing, Judging</div>
+    <div class="mb-4 text-xs lab-muted">Experiment with custom LLM metrics. Access secured for trusted users.</div>
+    <div>
+      <label class="lab-muted text-xs">Username (optional)</label>
+      <input class="lab-input w-full py-2 px-3 mb-3 mt-1" placeholder="Optional" autocomplete="username"
+            value="${state.authCredentials.username}"
+            oninput="state.authCredentials.username=this.value">
+      <label class="lab-muted text-xs">Access Key</label>
+      <div class="relative">
+        <input type="${state.showAccessKey ? 'text':'password'}" class="lab-input w-full py-2 px-3 mt-1"
+          placeholder="Enter access key" autocomplete="off"
+          value="${state.authCredentials.accessKey}"
+          oninput="state.authCredentials.accessKey=this.value"
+          onkeydown="if(event.key==='Enter') handleAuth()">
+        <button type="button" class="absolute right-1 top-1 text-gray-600" onclick="state.showAccessKey=!state.showAccessKey;render()"
+          aria-label="Show access key"><i data-lucide='${state.showAccessKey?'eye-off':'eye'}' class="w-4 h-4"></i></button>
+      </div>
+      <button 
+        onclick="alert('Access key generation is in progress. Currently, only developers have access.');"
+        class="mt-3 mb-1 text-xs px-3 py-1 border border-gray-700 rounded text-gray-300 hover:bg-[#19191d]"
+        type="button">
+        Get Access Key
+      </button>
+      ${state.authError? (`<div class="text-xs lab-muted mt-2" style="color:#ce3141;">${state.authError}</div>`):''}
+      <button onclick="handleAuth()" class="w-full border mt-5 py-2 rounded bg-black hover:bg-[#19191d] border-gray-700 text-white font-mono">Enter Playground</button>
+    </div>
+    <div class="lab-footer pt-7">MetricPlayground &copy; 2025</div>
+  </div>
+</div>`;
+}
+function renderMainLab() {
+updateFieldsFromTemplate();
+let introText = `
+  <div class="flex flex-col items-center mb-4">
+    <div class="motif mb-2">Measurement, Observation, Framing, Judging</div>
+    <div class="tagline" style="margin-bottom:24px;">Discover, experiment, and iterate—it’s how the best LLM metrics are made.</div>
+  </div>
+`;
+let resultSection = '';
+if (state.apiError) resultSection = `
+  <div class="lab-card border border-red-900 text-red-300 mt-5 p-4">
+    <div class="flex items-center gap-2 mb-2"><i data-lucide="alert-circle" class="w-5 h-5"></i>
+      <strong>Evaluation Error</strong>
+    </div>
+    <div class="text-sm">${state.apiError}</div>
+  </div>
+`;
+else if (state.result) {
+    resultSection = `
+  <div class="lab-card border border-gray-700 mt-6 p-5 flex flex-col gap-4">
+    <div>
+      <div class="font-bold mb-2" style="color:#d9f9d6;">Evaluation Results</div>
+      <div class="lab-help mb-2">Evaluation completed. See outputs below.</div>
+      <pre class="bg-black rounded p-3 text-xs overflow-x-auto" style="border:1px solid #1a1a1d;">${JSON.stringify(state.result.result,null,2)}</pre>
+    </div>
+    <div class="flex items-center gap-3">
+      <button
+        class="bg-blue-700 hover:bg-blue-800 text-white py-2 px-4 rounded font-mono text-sm"
+        onclick="handleSaveMetric()"
+        ${state.isLoading ? 'disabled' : ''}>
+        Save Metric
+      </button>
+      ${state.saveMetricStatus ? `
+        <span class="${state.saveMetricStatus.success ? 'save-success' : 'save-error'} text-sm">
+          ${state.saveMetricStatus.message}
+        </span>
+      ` : ''}
+    </div>
+  </div>
+  `;
+}
+
+return `
+<div class="min-h-screen flex flex-col" style="background:var(--lab-bg);">
+  <div class="py-6 px-0 w-full border-b border-gray-900 flex justify-center">
+    <div class="flex items-center gap-2">
+      <div class="rounded-full bg-black border border-gray-800 w-9 h-9 flex items-center justify-center"><span style="font-size:1.6rem;font-weight:bold;">M</span></div>
+      <span class="text-2xl font-mono font-bold tracking-wide">MetricPlayground</span>
+    </div>
+  </div>
+  <div class="container mx-auto w-full max-w-4xl px-3 pt-6 pb-2">
+    ${introText}
+    <div class="grid gap-8 md:grid-cols-2">
+      <div class="flex flex-col gap-6">
+        <div class="lab-card p-5 px-6">
+          <div class="text-lg font-mono mb-3 font-bold">Metric Configuration</div>
+          <label class="lab-help mb-2">Metric Name</label>
+          <input class="lab-input w-full py-2 px-3 mb-3" value="${state.formData.name}"
+            oninput="state.formData.name=this.value;render()">
+            ${state.validationErrors.name?`<div class="lab-help" style="color:#e77171;">${state.validationErrors.name}</div>`:''}
+          <label class="lab-help">Prompt Template</label>
+          <textarea class="lab-textarea w-full px-3 py-2 mb-1" id="prompt-template-textarea" rows="5"
+            onblur="promptOnBlur(this)">${state.formData.prompt_template}</textarea>
+          ${state.validationErrors.prompt_template?`<div class="lab-help mb-1" style="color:#e77171;">${state.validationErrors.prompt_template}</div>`:''}
+          <div class="lab-help mb-3">Type <span class="font-bold">{{field}}</span> to define a field. Example: <code>User: {{user}}</code></div>
+          <div class="bg-black text-xs rounded border border-gray-800 p-2 mb-1">Live fields: ${
+              state.formData.input_fields.length
+                ? state.formData.input_fields.map(f=>`<span class="font-mono bg-[#141416] px-1 rounded mr-2">${f}</span>`).join('')
+                : `<span>No fields (add {{field}} in prompt)</span>`
+            }
+          </div>
+          <div class="text-xs ml-1 lab-muted mb-1">(Fields above are auto-extracted from your prompt)</div>
+        </div>
+        <div class="lab-card p-5 px-6">
+          <div class="text-lg font-mono mb-3 font-bold">Test Inputs</div>
+          ${state.formData.input_fields.map(field => `
+            <label class="lab-help">${field}</label>
+            <textarea class="lab-textarea w-full mb-2" rows="2" placeholder="Enter test value"
+              oninput="state.formData.test_case_params['${field}']=this.value;render()">${state.formData.test_case_params[field]||''}</textarea>
+              ${state.validationErrors['test_case_params_'+field]?`<div class="lab-help mb-1" style="color:#e77171;">${state.validationErrors['test_case_params_'+field]}</div>`:''}
+          `).join('')}
+        </div>
+      </div>
+      <div class="flex flex-col gap-6">
+        <div class="lab-card p-5 px-6">
+          <div class="flex items-center justify-between">
+            <div class="text-lg font-mono mb-2 font-bold">Output Schema</div>
+            <button class="lab-help px-2 py-1 border border-gray-700 hover:bg-[#19191b]"
+                onclick="state.formData.output_schema['field_'+(Object.keys(state.formData.output_schema).length+1)]='';render()"
+                type="button">+ Add field</button>
+          </div>
+          ${state.validationErrors.output_schema?`<div class="lab-help mb-2" style="color:#e77171;">${state.validationErrors.output_schema}</div>`:''}
+          ${
+            Object.entries(state.formData.output_schema).map(([k,v])=>`
+              <div class="flex gap-2 mb-1">
+                <input class="lab-input py-1 px-2 flex-1" value="${k}" placeholder="output_name"
+                  onblur="if(this.value !== '${k}') { let val=state.formData.output_schema['${k}'];delete state.formData.output_schema['${k}'];state.formData.output_schema[this.value]=val;render(); }">
+                <button class="text-xs px-2 py-1 border border-gray-800 text-red-300 hover:text-red-100 hover:bg-[#151518] rounded"
+                  onclick="delete state.formData.output_schema['${k}'];render()" type="button">remove</button>
+              </div>
+              <textarea class="lab-textarea w-full mb-2" rows="2" placeholder="Instruction/format notes (optional)"
+                oninput="state.formData.output_schema['${k}']=this.value;render()">${v||''}</textarea>
+            `).join('')
+          }
+          <div class="lab-muted text-xs">Define the structure LLM must return (e.g. "score: float between 0 and 1").</div>
+        </div>
+        <div class="lab-card p-5 px-6">
+          <div class="font-mono mb-1 font-bold">Post-process Python (Optional)</div>
+          <div class="lab-help mb-1">Edit output via custom <code>def postprocess(...)</code> Python code</div>
+          <textarea id="python-editor" class="lab-textarea w-full" rows="8"
+            placeholder="def postprocess(llm_response, request):&#10;    # ...optional postprocessing code&#10;    # return llm_response"
+            >${state.formData.post_process_code||''}</textarea>
+          ${state.validationErrors.post_process_code?`<div class="lab-help mb-1" style="color:#e77171;">${state.validationErrors.post_process_code}</div>`:''}
+        </div>
+      </div>
+    </div>
+    <div class="py-8 flex flex-col items-center">
+      <button class="text-lg font-mono bg-black hover:bg-[#18181a] rounded px-8 py-3 border border-gray-700 font-bold
+        disabled:opacity-60 disabled:pointer-events-none"
+        onclick="handleSubmit()" ${state.isLoading?'disabled':''}>
+        <i data-lucide="flask-conical" class="w-5 h-5 mr-2 inline"></i>
+        Run Evaluation
+      </button>
+      <div class="lab-muted text-xs mt-2">You can run experiments as many times as needed.</div>
+    </div>
+    ${resultSection}
+    <div class="lab-card border border-gray-800 mt-8 p-4 text-xs text-[#b9b8b6]">
+      <div class="font-bold mb-1">API Info</div>
+      Endpoint: <span class="font-mono px-2 py-1 bg-[#19191d] rounded border border-gray-800">POST /v1/custom_metric/evaluate</span><br>
+      Auth: Basic (access key required)<br>
+      Model: <span class="font-mono px-1">sonar-pro</span><br>
+      <a href="https://www.linkedin.com/in/mebhaveshg/" class="text-blue-400 hover:underline" target="_blank">Questions? Bhavesh on LinkedIn</a>
+    </div>
+  </div>
+  <div class="lab-footer">MetricPlayground &mdash; Discover, Experiment, and Iterate. The Best LLM Metrics Are Made Here.</div>
+</div>
+`;
+}
+
+let pythonEditor = null;
+function initializePythonEditor() {
+    setTimeout(() => {
+        const textarea = document.getElementById('python-editor');
+        if (!textarea || !window.CodeMirror) return;
+        if (!pythonEditor) {
+            pythonEditor = CodeMirror.fromTextArea(textarea, {
+                mode: 'python',
+                theme: 'material-darker',
+                lineNumbers: true,
+                autoCloseBrackets: true,
+                matchBrackets: true,
+                indentUnit: 4,
+                tabSize: 4,
+                lineWrapping: true,
+                extraKeys: {
+                    'Tab': function(cm) {
+                        if (cm.somethingSelected()) cm.indentSelection('add');
+                        else cm.replaceSelection('    ');
+                    }
+                }
+            });
+            pythonEditor.setValue(state.formData.post_process_code || '');
+            pythonEditor.on('change', function(cm) {
+                state.formData.post_process_code = cm.getValue();
+            });
+        } else {
+            if (pythonEditor.getValue() !== state.formData.post_process_code)
+                pythonEditor.setValue(state.formData.post_process_code || '');
+        }
+    }, 150);
+}
+window.promptOnBlur = function(textarea) {
+    if (textarea.value !== state.formData.prompt_template) {
+        state.formData.prompt_template = textarea.value;
+        render();
+    }
+}
+function render() {
+    const app = document.getElementById('app');
+    let wasPromptFocused = false, promptSelStart = 0, promptSelEnd = 0;
+    const promptInput = document.getElementById('prompt-template-textarea');
+    if (promptInput && document.activeElement === promptInput) {
+        wasPromptFocused = true;
+        promptSelStart = promptInput.selectionStart;
+        promptSelEnd = promptInput.selectionEnd;
+    }
+    if (!state.isAuthenticated) { app.innerHTML = renderAuth(); }
+    else { app.innerHTML = renderMainLab(); initializePythonEditor(); }
+    if (wasPromptFocused) {
+        setTimeout(()=>{
+            const newPromptInput = document.getElementById('prompt-template-textarea');
+            if (newPromptInput) {
+                newPromptInput.focus();
+                try { newPromptInput.setSelectionRange(promptSelStart, promptSelEnd); } catch {}
+            }
+        },5);
+    }
+    if(state.isLoading && !document.getElementById('lab-loader')) {
+      document.body.insertAdjacentHTML('beforeend', `<div id="lab-loader">${loaderOverlay()}</div>`);
+      if (!loaderInterval) loaderInterval = setInterval(()=>{
+        state.loaderDots = (state.loaderDots+1)%3; render();
+      }, 350);
+    } else if (!state.isLoading && document.getElementById('lab-loader')) {
+      document.getElementById('lab-loader').remove();
+      if (loaderInterval) { clearInterval(loaderInterval); loaderInterval = null;}
+    }
+    if(window.lucide) lucide.createIcons();
+}
+document.addEventListener('DOMContentLoaded', ()=>{ render(); });
+</script>
+</body>
+</html>

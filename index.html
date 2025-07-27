@@ -14,26 +14,25 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
     <style>
-        :root { --lab-bg: #101014; --lab-panel: #19191d; --lab-border: #262629; --lab-fg: #f5f5f5; --lab-muted: #b0b0b5;}
-        body { background: var(--lab-bg); color: var(--lab-fg); font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', 'monospace'; min-height: 100vh;}
-        .lab-card { background: var(--lab-panel); border: 1px solid var(--lab-border); border-radius: 0.5rem;}
-        .lab-input, .lab-textarea { background: #101014; color: var(--lab-fg); border: 1px solid var(--lab-border); border-radius: 0.375rem;}
-        .lab-input::placeholder, .lab-textarea::placeholder { color: #7c7b88; }
-        .lab-loader-overlay { position: fixed; z-index: 1000; inset: 0; background: rgba(16,16,20,0.92);
-          display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace;}
-        .loader-dots span { font-size: 1.75rem; letter-spacing: 0.18em; opacity: 0.15;}
-        .loader-dots .dot-on { opacity: 1; color: #fff; transition: opacity 0.2s;}
-        .lab-footer { color: #888; font-size: 0.99rem; padding: 1.6em 0 0.6em 0; text-align: center; letter-spacing: .02em;}
-        .lab-muted { color: var(--lab-muted);}
-        .lab-help { color: var(--lab-muted); font-size: 0.93rem;}
-        .motif { color: #e5e5e6; font-size:1.06rem; font-family: inherit; letter-spacing:.04em; font-weight: bold;}
-        .tagline { color: #b8bcff; font-size:1.16rem; font-family:'IBM Plex Mono',monospace; letter-spacing:.02em; margin-bottom:1rem;}
-        .CodeMirror { background: #19191d; color: #edeef1; font-size: 1em; min-height: 140px; border-radius:0.375em;}
-        .modal-bg { background: rgba(8,8,12,0.8);}
-        .fade { transition: opacity 0.25s;}
-        .save-success { color: #4ade80; }
-        .save-error { color: #f87171; }
-        .waitlist-popup { z-index:5000; background:rgba(17,17,20,0.96); }
+    :root { --lab-bg: #101014; --lab-panel: #19191d; --lab-border: #262629; --lab-fg: #f5f5f5; --lab-muted: #b0b0b5;}
+    body { background: var(--lab-bg); color: var(--lab-fg); font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', 'monospace'; min-height: 100vh;}
+    .lab-card { background: var(--lab-panel); border: 1px solid var(--lab-border); border-radius: 0.5rem;}
+    .lab-input, .lab-textarea { background: #101014; color: var(--lab-fg); border: 1px solid var(--lab-border); border-radius: 0.375rem;}
+    .lab-input::placeholder, .lab-textarea::placeholder { color: #7c7b88; }
+    .lab-loader-overlay { position: fixed; z-index: 1000; inset: 0; background: rgba(16,16,20,0.92); display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace;}
+    .loader-dots span { font-size: 1.75rem; letter-spacing: 0.18em; opacity: 0.15;}
+    .loader-dots .dot-on { opacity: 1; color: #fff; transition: opacity 0.2s;}
+    .lab-footer { color: #888; font-size: 0.99rem; padding: 1.6em 0 0.6em 0; text-align: center; letter-spacing: .02em;}
+    .lab-muted { color: var(--lab-muted);}
+    .lab-help { color: var(--lab-muted); font-size: 0.93rem;}
+    .motif { color: #e5e5e6; font-size:1.06rem; font-family: inherit; letter-spacing:.04em; font-weight: bold;}
+    .tagline { color: #b8bcff; font-size:1.16rem; font-family:'IBM Plex Mono',monospace; letter-spacing:.02em; margin-bottom:1rem;}
+    .CodeMirror { background: #19191d; color: #edeef1; font-size: 1em; min-height: 140px; border-radius:0.375em;}
+    .modal-bg { background: rgba(8,8,12,0.8);}
+    .fade { transition: opacity 0.25s;}
+    .save-success { color: #4ade80; }
+    .save-error { color: #f87171; }
+    .waitlist-popup { z-index:5000; background:rgba(17,17,20,0.96); }
     </style>
 </head>
 <body>
@@ -47,7 +46,7 @@ let state = {
     showAccessKey: false,
     authError: '',
     waitlistPopup: false,
-    waitlistStep: 'form', // can be form, loading, submitted, error
+    waitlistStep: 'form',
     waitlistEmail: '',
     waitlistMsg: '',
     saveMetricStatus: null,
@@ -72,10 +71,8 @@ let state = {
     evaluationFinished: false
 };
 
-// ---- Waitlist email validation & handling ----
-function validateEmail(email) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-}
+function validateEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()); }
+
 async function handleWaitlistSubmit(e) {
     if(e) e.preventDefault();
     let email = document.getElementById('waitlist-email-input').value.trim();
@@ -89,28 +86,22 @@ async function handleWaitlistSubmit(e) {
     state.waitlistStep = 'loading'; render();
     try {
         let resp = await fetch(API_BASE_URL + '/waitlist', {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email })
         });
         if(resp.ok) {
             state.waitlistStep='submitted';
-            state.waitlistMsg='';
-            setTimeout(()=>{state.waitlistPopup=false; state.waitlistStep='form'; state.waitlistEmail='';}, 4000);
+            setTimeout(()=>{state.waitlistPopup=false; state.waitlistStep='form'; state.waitlistEmail='';render();}, 4000);
         }
         else {
             let d; try {d=await resp.json();} catch{};
-            state.waitlistMsg=(d && d.detail?d.detail:"Something went wrong.");
-            state.waitlistStep='form';
+            state.waitlistMsg=(d&&d.detail?d.detail:"Something went wrong.");
+            state.waitlistStep='form'; render();
         }
     } catch {
-        state.waitlistMsg = "Network error. Try again.";
-        state.waitlistStep = 'form';
+        state.waitlistMsg = "Network error. Try again."; state.waitlistStep = 'form'; render();
     }
-    render();
 }
-// ---- End waitlist ----
-
 function extractPlaceholders(str) {
     const matches = [...str.matchAll(/\{\{(\w+)\}\}/g)];
     return Array.from(new Set(matches.map(m => m[1])));
@@ -149,10 +140,7 @@ async function handleSubmit() {
     state.validationErrors = validateForm();
     if (Object.keys(state.validationErrors).length) return render();
     state.isLoading = true;
-    state.apiError = '';
-    state.evaluationFinished = false;
-    state.saveMetricStatus = null;
-    state.result = null; render();
+    state.apiError = ''; state.evaluationFinished = false; state.saveMetricStatus = null; state.result = null; render();
     let tries = 0, maxTries = 3, lastErr = '';
     updateFieldsFromTemplate();
     while (tries < maxTries) {
@@ -160,10 +148,7 @@ async function handleSubmit() {
             const credentials = btoa(`${state.authCredentials.username}:${state.authCredentials.accessKey}`);
             const resp = await fetch(`${API_BASE_URL}/v1/custom_metric/evaluate`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Basic ${credentials}`
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${credentials}` },
                 body: JSON.stringify(state.formData)
             });
             if (!resp.ok) {
@@ -173,33 +158,22 @@ async function handleSubmit() {
                 throw new Error(lastErr);
             }
             let data = await resp.json();
-            state.result = data;
-            state.evaluationFinished = true;
-            state.apiError = ''; break;
+            state.result = data; state.evaluationFinished = true; state.apiError = ''; break;
         } catch (e) {
-            lastErr = e.message;
-            tries += 1;
-            if (tries >= maxTries) break;
-            await new Promise(res=>setTimeout(res, 1000));
+            lastErr = e.message; tries += 1;
+            if (tries >= maxTries) break; await new Promise(res=>setTimeout(res, 1000));
         }
     }
-    if (tries===maxTries && !state.result && !state.apiError) {
-        state.apiError = "Evaluation failed. Please review your metric configuration and try again.";
-    }
+    if (tries===maxTries && !state.result && !state.apiError) state.apiError = "Evaluation failed. Please review your metric configuration and try again.";
     state.isLoading = false; render();
 }
-
 async function handleSaveMetric() {
-    state.saveMetricStatus = null;
-    render();
+    state.saveMetricStatus = null; render();
     try {
         const credentials = btoa(`${state.authCredentials.username}:${state.authCredentials.accessKey}`);
         const resp = await fetch(`${API_BASE_URL}/save`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${credentials}`
-            },
+            headers: {'Content-Type': 'application/json','Authorization': `Basic ${credentials}`},
             body: JSON.stringify({
                 access_key: state.authCredentials.accessKey,
                 metric: {
@@ -210,16 +184,12 @@ async function handleSaveMetric() {
                 }
             })
         });
-        if (resp.ok) {
-            state.saveMetricStatus = {success: true, message: "Metric saved successfully."};
-        } else {
-            let data;
-            try { data = await resp.json(); } catch {}
+        if (resp.ok) state.saveMetricStatus = {success: true, message: "Metric saved successfully."};
+        else {
+            let data; try { data = await resp.json(); } catch {}
             state.saveMetricStatus = {success: false, message: data && data.detail ? data.detail : "Failed to save metric."};
         }
-    } catch(e) {
-        state.saveMetricStatus = {success: false, message: "Network error. Please try again."};
-    }
+    } catch(e) { state.saveMetricStatus = {success: false, message: "Network error. Please try again."}; }
     render();
 }
 
@@ -238,7 +208,6 @@ function loaderOverlay() {
     </div>
   </div>`;
 }
-
 function renderWaitlistPopup() {
   let b = '';
   if(state.waitlistStep=='form'||state.waitlistStep=='error') b = `
@@ -276,14 +245,14 @@ return `<div class="min-h-screen flex items-center justify-center lab-bg" style=
       <label class="lab-muted text-xs">Username (optional)</label>
       <input class="lab-input w-full py-2 px-3 mb-3 mt-1" placeholder="Optional" autocomplete="username"
             value="${state.authCredentials.username}"
-            oninput="state.authCredentials.username=this.value">
+            onblur="state.authCredentials.username=this.value">
       <label class="lab-muted text-xs">Access Key</label>
       <div class="relative">
         <input type="${state.showAccessKey ? 'text':'password'}" class="lab-input w-full py-2 px-3 mt-1"
           placeholder="Enter access key" autocomplete="off"
           value="${state.authCredentials.accessKey}"
-          oninput="state.authCredentials.accessKey=this.value"
-          onkeydown="if(event.key==='Enter') handleAuth()">
+          onblur="state.authCredentials.accessKey=this.value"
+          onkeydown="if(event.key==='Enter') {state.authCredentials.accessKey=this.value; handleAuth();}">
         <button type="button" class="absolute right-1 top-1 text-gray-600" onclick="state.showAccessKey=!state.showAccessKey;render()"
           aria-label="Show access key"><i data-lucide='${state.showAccessKey?'eye-off':'eye'}' class="w-4 h-4"></i></button>
       </div>
@@ -303,12 +272,7 @@ return `<div class="min-h-screen flex items-center justify-center lab-bg" style=
 }
 function renderMainLab() {
 updateFieldsFromTemplate();
-let introText = `
-  <div class="flex flex-col items-center mb-4">
-    <div class="motif mb-2">Frame, Evaluate, Observe, Iterate</div>
-    <div class="tagline" style="margin-bottom:24px;"></div>
-  </div>
-`;
+let introText = `<div class="flex flex-col items-center mb-4"><div class="motif mb-2">Frame, Evaluate, Observe, Iterate</div></div>`;
 let resultSection = '';
 if (state.apiError) resultSection = `
   <div class="lab-card border border-red-900 text-red-300 mt-5 p-4">
@@ -316,8 +280,7 @@ if (state.apiError) resultSection = `
       <strong>Error</strong>
     </div>
     <div class="text-sm">${state.apiError}</div>
-  </div>
-`;
+  </div>`;
 else if (state.result) {
     resultSection = `
   <div class="lab-card border border-gray-700 mt-6 p-5 flex flex-col gap-4">
@@ -350,7 +313,6 @@ function renderSaveMetricBtn() {
       `:''}
     </div>`;
 }
-
 return `
 <div class="min-h-screen flex flex-col" style="background:var(--lab-bg);">
   <div class="py-6 px-0 w-full border-b border-gray-900 flex justify-center">
@@ -366,9 +328,10 @@ return `
         <div class="lab-card p-5 px-6">
           <div class="text-lg font-mono mb-3 font-bold">Metric Configuration</div>
           <label class="lab-help mb-2">Metric Name</label>
-          <input class="lab-input w-full py-2 px-3 mb-3" value="${state.formData.name}"
-            oninput="state.formData.name=this.value;render()">
-            ${state.validationErrors.name?`<div class="lab-help" style="color:#e77171;">${state.validationErrors.name}</div>`:''}
+          <input class="lab-input w-full py-2 px-3 mb-3"
+            value="${state.formData.name}" 
+            onblur="updateField('name', this.value)">
+          ${state.validationErrors.name?`<div class="lab-help" style="color:#e77171;">${state.validationErrors.name}</div>`:''}
           <label class="lab-help">Prompt Template</label>
           <textarea class="lab-textarea w-full px-3 py-2 mb-1" id="prompt-template-textarea" rows="5"
             onblur="promptOnBlur(this)">${state.formData.prompt_template}</textarea>
@@ -387,7 +350,7 @@ return `
           ${state.formData.input_fields.map(field => `
             <label class="lab-help">${field}</label>
             <textarea class="lab-textarea w-full mb-2" rows="2" placeholder="Enter test value"
-              oninput="state.formData.test_case_params['${field}']=this.value;render()">${state.formData.test_case_params[field]||''}</textarea>
+              onblur="updateTestParam('${field}', this.value)">${state.formData.test_case_params[field]||''}</textarea>
               ${state.validationErrors['test_case_params_'+field]?`<div class="lab-help mb-1" style="color:#e77171;">${state.validationErrors['test_case_params_'+field]}</div>`:''}
           `).join('')}
         </div>
@@ -405,12 +368,12 @@ return `
             Object.entries(state.formData.output_schema).map(([k,v])=>`
               <div class="flex gap-2 mb-1">
                 <input class="lab-input py-1 px-2 flex-1" value="${k}" placeholder="output_name"
-                  onblur="if(this.value !== '${k}') { let val=state.formData.output_schema['${k}'];delete state.formData.output_schema['${k}'];state.formData.output_schema[this.value]=val;render(); }">
+                  onblur="updateOutputSchemaKey('${k}', this.value)">
                 <button class="text-xs px-2 py-1 border border-gray-800 text-red-300 hover:text-red-100 hover:bg-[#151518] rounded"
                   onclick="delete state.formData.output_schema['${k}'];render()" type="button">remove</button>
               </div>
               <textarea class="lab-textarea w-full mb-2" rows="2" placeholder="Instruction/format notes (optional)"
-                oninput="state.formData.output_schema['${k}']=this.value;render()">${v||''}</textarea>
+                onblur="updateOutputSchemaVal('${k}', this.value)">${v||''}</textarea>
             `).join('')
           }
           <div class="lab-muted text-xs">Define the structure LLM must return (e.g. "score: float between 0 and 1").</div>
@@ -419,6 +382,7 @@ return `
           <div class="font-mono mb-1 font-bold">Post-process Python (Optional)</div>
           <div class="lab-help mb-1">Edit output via custom <code>def postprocess(...)</code> Python code</div>
           <textarea id="python-editor" class="lab-textarea w-full" rows="8"
+            onblur="updateField('post_process_code', this.value)"
             placeholder="def postprocess(llm_response, request):&#10;    # ...optional postprocessing code&#10;    # return llm_response"
             >${state.formData.post_process_code||''}</textarea>
           ${state.validationErrors.post_process_code?`<div class="lab-help mb-1" style="color:#e77171;">${state.validationErrors.post_process_code}</div>`:''}
@@ -448,25 +412,28 @@ return `
 `;
 }
 
+function updateField(key, value) { if (state.formData[key] !== value) { state.formData[key] = value; render(); } }
+function updateTestParam(key, value) { if (state.formData.test_case_params[key] !== value) { state.formData.test_case_params[key] = value; render(); } }
+function updateOutputSchemaKey(oldKey, newKey) {
+    if (oldKey !== newKey) {
+        let v = state.formData.output_schema[oldKey]; delete state.formData.output_schema[oldKey]; state.formData.output_schema[newKey] = v; render();
+    }
+}
+function updateOutputSchemaVal(key, value) {
+    if (state.formData.output_schema[key] !== value) { state.formData.output_schema[key]=value; render(); }
+}
+
 function initializePythonEditor() {
     setTimeout(() => {
         const textarea = document.getElementById('python-editor');
         if (!textarea || !window.CodeMirror) return;
         if (!pythonEditor) {
             pythonEditor = CodeMirror.fromTextArea(textarea, {
-                mode: 'python',
-                theme: 'material-darker',
-                lineNumbers: true,
-                autoCloseBrackets: true,
-                matchBrackets: true,
-                indentUnit: 4,
-                tabSize: 4,
-                lineWrapping: true,
-                extraKeys: {
-                    'Tab': function(cm) { if (cm.somethingSelected()) cm.indentSelection('add'); else cm.replaceSelection('    ');}
-                }
+                mode: 'python', theme: 'material-darker', lineNumbers: true, autoCloseBrackets: true, matchBrackets: true,
+                indentUnit: 4, tabSize: 4, lineWrapping: true,
+                extraKeys: {'Tab': function(cm) { if(cm.somethingSelected())cm.indentSelection('add');else cm.replaceSelection('    '); } }
             });
-            pythonEditor.setValue(state.formData.post_process_code || '');
+            pythonEditor.setValue(state.formData.post_process_code||'');
             pythonEditor.on('change', function(cm) { state.formData.post_process_code = cm.getValue(); });
         } else {
             if (pythonEditor.getValue() !== state.formData.post_process_code)
@@ -476,8 +443,7 @@ function initializePythonEditor() {
 }
 window.promptOnBlur = function(textarea) {
     if (textarea.value !== state.formData.prompt_template) {
-        state.formData.prompt_template = textarea.value;
-        render();
+        state.formData.prompt_template = textarea.value; render();
     }
 }
 window.handleWaitlistSubmit = handleWaitlistSubmit;
@@ -492,22 +458,12 @@ function render() {
         promptSelStart = promptInput.selectionStart;
         promptSelEnd = promptInput.selectionEnd;
     }
-    if (!state.isAuthenticated) { app.innerHTML = renderAuth(); }
+    if (!state.isAuthenticated) app.innerHTML = renderAuth();
     else { app.innerHTML = renderMainLab(); initializePythonEditor(); }
-    if (wasPromptFocused) {
-        setTimeout(()=>{
-            const newPromptInput = document.getElementById('prompt-template-textarea');
-            if (newPromptInput) {
-                newPromptInput.focus();
-                try { newPromptInput.setSelectionRange(promptSelStart, promptSelEnd); } catch {}
-            }
-        },5);
-    }
+    if (wasPromptFocused) setTimeout(()=>{const newPromptInput=document.getElementById('prompt-template-textarea'); if (newPromptInput) { newPromptInput.focus(); try{newPromptInput.setSelectionRange(promptSelStart,promptSelEnd);}catch{} } },5);
     if(state.isLoading && !document.getElementById('lab-loader')) {
       document.body.insertAdjacentHTML('beforeend', `<div id="lab-loader">${loaderOverlay()}</div>`);
-      if (!loaderInterval) loaderInterval = setInterval(()=>{
-        state.loaderDots = (state.loaderDots+1)%3; render();
-      }, 350);
+      if (!loaderInterval) loaderInterval = setInterval(()=>{state.loaderDots = (state.loaderDots+1)%3; render();}, 350);
     } else if (!state.isLoading && document.getElementById('lab-loader')) {
       document.getElementById('lab-loader').remove();
       if (loaderInterval) { clearInterval(loaderInterval); loaderInterval = null;}

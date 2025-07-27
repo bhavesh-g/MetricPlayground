@@ -1,8 +1,9 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>MetricPlayground – Measurement, Observation, Framing, Judging</title>
+    <title>MetricPlayground – Frame, Evaluate, Observe, Iterate</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="MetricPlayground: The experimental lab for inventing and discovering the best LLM evaluation metrics.">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -185,11 +186,11 @@ function loaderOverlay() {
   return `<div class="lab-loader-overlay" id="lab-loader-overlay">
     <div>
       <div class="flex flex-col items-center">
-        <div class="mb-4 text-lg"><span style="font-weight:bold;">Crunching</span>
+        <div class="mb-4 text-lg"><span style="font-weight:bold;">Processing</span>
           <span class="loader-dots">${[0,1,2].map(i=>`<span class="${(i===state.loaderDots?'dot-on':'')}">.</span>`).join('')}</span>
         </div>
         <div class="py-2 px-3 bg-black/60 rounded text-xs border text-lab-muted" style="border-color:#222;">
-          Running your experiment in the lab...
+          clarity takes a moment....
         </div>
       </div>
     </div>
@@ -203,7 +204,7 @@ return `<div class="min-h-screen flex items-center justify-center lab-bg" style=
       <div class="rounded-full border border-gray-800 bg-black h-9 w-9 flex items-center justify-center mr-2"><span style="font-size:1.6rem;font-weight:bold;">M</span></div>
       <span class="text-xl font-mono font-bold tracking-wide">MetricPlayground</span>
     </div>
-    <div class="motif mb-1 text-center">Measurement, Observation, Framing, Judging</div>
+    <div class="motif mb-1 text-center">Frame, Evaluate, Observe, Iterate</div>
     <div class="mb-4 text-xs lab-muted">Experiment with custom LLM metrics. Access secured for trusted users.</div>
     <div>
       <label class="lab-muted text-xs">Username (optional)</label>
@@ -237,15 +238,15 @@ function renderMainLab() {
 updateFieldsFromTemplate();
 let introText = `
   <div class="flex flex-col items-center mb-4">
-    <div class="motif mb-2">Measurement, Observation, Framing, Judging</div>
-    <div class="tagline" style="margin-bottom:24px;">Discover, experiment, and iterate—it’s how the best LLM metrics are made.</div>
+    <div class="motif mb-2">Frame, Evaluate, Observe, Iterate</div>
+    <div class="tagline" style="margin-bottom:24px;"></div>
   </div>
 `;
 let resultSection = '';
 if (state.apiError) resultSection = `
   <div class="lab-card border border-red-900 text-red-300 mt-5 p-4">
     <div class="flex items-center gap-2 mb-2"><i data-lucide="alert-circle" class="w-5 h-5"></i>
-      <strong>Evaluation Error</strong>
+      <strong>Error</strong>
     </div>
     <div class="text-sm">${state.apiError}</div>
   </div>
@@ -354,9 +355,10 @@ return `
         disabled:opacity-60 disabled:pointer-events-none"
         onclick="handleSubmit()" ${state.isLoading?'disabled':''}>
         <i data-lucide="flask-conical" class="w-5 h-5 mr-2 inline"></i>
-        Run Evaluation
+        Let's'Test
       </button>
-      <div class="lab-muted text-xs mt-2">You can run experiments as many times as needed.</div>
+      <div class="lab-muted text-xs mt-2">You define the standard - precision is a process.
+</div>
     </div>
     ${resultSection}
     <div class="lab-card border border-gray-800 mt-8 p-4 text-xs text-[#b9b8b6]">
@@ -367,7 +369,7 @@ return `
       <a href="https://www.linkedin.com/in/mebhaveshg/" class="text-blue-400 hover:underline" target="_blank">Questions? Bhavesh on LinkedIn</a>
     </div>
   </div>
-  <div class="lab-footer">MetricPlayground &mdash; Discover, Experiment, and Iterate. The Best LLM Metrics Are Made Here.</div>
+  <div class="lab-footer">The Best LLM Metrics Are Made Here.</div>
 </div>
 `;
 }
